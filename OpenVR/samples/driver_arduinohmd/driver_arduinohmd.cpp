@@ -189,9 +189,14 @@ bool CorrectQuatValue(float Value)
 void SetCentering()
 {
 	if (ArduinoRotationType == false) {
-		yprOffset[0] = ArduinoIMU[0];
-		yprOffset[1] = ArduinoIMU[1];
-		yprOffset[2] = ArduinoIMU[2];
+		// Update HMD quaternion with current state of IMU sensor
+		hmdQuat = HmdQuaternion_Init(1.0, 0, 0, 0);
+
+		RotateQuaternion(
+			hmdQuat,
+			DegToRad(ArduinoIMU[2]),
+			DegToRad(ArduinoIMU[0]),
+			DegToRad(ArduinoIMU[1]));
 	}
 	else {
 		float length = std::sqrt(ArduinoIMUQuat.x * ArduinoIMUQuat.x + ArduinoIMUQuat.y * ArduinoIMUQuat.y + ArduinoIMUQuat.z * ArduinoIMUQuat.z + ArduinoIMUQuat.w * ArduinoIMUQuat.w);
