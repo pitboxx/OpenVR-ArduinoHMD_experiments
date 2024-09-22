@@ -170,6 +170,23 @@ inline void RotateQuaternion(HmdQuaternion_t& q, double yaw, double pitch, doubl
 	q.z = q.w * combinedZ + q.x * combinedY - q.y * combinedX + q.z * combinedW;
 }
 
+inline void NormalizeQuaternion(HmdQuaternion_t& q) {
+	double magnitude = sqrt(q.w * q.w + q.x * q.x + q.y * q.y + q.z * q.z);
+
+	if (magnitude > 0.0) {
+		q.w /= magnitude;
+		q.x /= magnitude;
+		q.y /= magnitude;
+		q.z /= magnitude;
+	}
+	else {
+		q.w = 1.0;
+		q.x = 0.0;
+		q.y = 0.0;
+		q.z = 0.0;
+	}
+}
+
 bool CorrectAngleValue(float Value)
 {
 	if (Value > -180 && Value < 180)
@@ -197,6 +214,8 @@ void SetCentering()
 			DegToRad(ArduinoIMU[2]),
 			DegToRad(ArduinoIMU[0]),
 			DegToRad(ArduinoIMU[1]));
+
+		NormalizeQuaternion(hmdQuat);
 	}
 	else {
 		float length = std::sqrt(ArduinoIMUQuat.x * ArduinoIMUQuat.x + ArduinoIMUQuat.y * ArduinoIMUQuat.y + ArduinoIMUQuat.z * ArduinoIMUQuat.z + ArduinoIMUQuat.w * ArduinoIMUQuat.w);
@@ -782,6 +801,8 @@ public:
 					DegToRad(yprOffset[2]),
 					DegToRad(yprOffset[0]),
 					DegToRad(yprOffset[1]));
+
+				NormalizeQuaternion(hmdQuat);
 								
 				// Assign updated rotation to HMD
 				pose.qRotation = hmdQuat;												
