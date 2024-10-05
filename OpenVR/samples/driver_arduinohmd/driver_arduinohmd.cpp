@@ -9,7 +9,6 @@
 #include <thread>
 #include <chrono>
 #include <algorithm>
-#include <cmath>
 
 #if defined( _WINDOWS )
 #include <windows.h>
@@ -113,7 +112,6 @@ struct QuaternionF {
 	float w, x, y, z;
 };
 QuaternionF ArduinoIMUQuat = { 0, 0, 0, 0 }, HMDQuatOffset = { 0, 0, 0, 0 }, LastArduinoIMUQuat = { 0, 0, 0, 0 };
-HmdQuaternion_t hmdQuat = HmdQuaternion_Init(1, 0, 0, 0);  // Quaternion of HMD state
 
 double DegToRad(double f) {
 	return f * (3.14159265358979323846 / 180);
@@ -149,44 +147,6 @@ inline vr::HmdQuaternion_t EulerAngleToQuaternion(double Yaw, double Pitch, doub
 	return q;
 }
 
-inline void RotateQuaternion(HmdQuaternion_t& q, double yaw, double pitch, double roll) {
-	double cy = cos(yaw * 0.5);
-	double sy = sin(yaw * 0.5);
-	double cp = cos(pitch * 0.5);
-	double sp = sin(pitch * 0.5);
-	double cr = cos(roll * 0.5);
-	double sr = sin(roll * 0.5);
-	
-	// Quaternions combination to rotate YPR
-	double combinedW = cy * cp * cr - sy * sp * sr;
-	double combinedX = cy * cp * sr - sy * sp * cr;
-	double combinedY = cy * sp * cr + sy * cp * sr;
-	double combinedZ = -cy * sp * sr + sy * cp * cr;
-
-	// Apply Rotation to target quaternion
-	q.w = q.w * combinedW - q.x * combinedX - q.y * combinedY - q.z * combinedZ;
-	q.x = q.w * combinedX + q.x * combinedW + q.y * combinedZ - q.z * combinedY;
-	q.y = q.w * combinedY - q.x * combinedZ + q.y * combinedW + q.z * combinedX;
-	q.z = q.w * combinedZ + q.x * combinedY - q.y * combinedX + q.z * combinedW;
-}
-
-inline void NormalizeQuaternion(HmdQuaternion_t& q) {
-	double magnitude = sqrt(q.w * q.w + q.x * q.x + q.y * q.y + q.z * q.z);
-
-	if (magnitude > 0.0) {
-		q.w /= magnitude;
-		q.x /= magnitude;
-		q.y /= magnitude;
-		q.z /= magnitude;
-	}
-	else {
-		q.w = 1.0;
-		q.x = 0.0;
-		q.y = 0.0;
-		q.z = 0.0;
-	}
-}
-
 bool CorrectAngleValue(float Value)
 {
 	if (Value > -180 && Value < 180)
@@ -206,16 +166,9 @@ bool CorrectQuatValue(float Value)
 void SetCentering()
 {
 	if (ArduinoRotationType == false) {
-		// Update HMD quaternion with current state of IMU sensor
-		hmdQuat = HmdQuaternion_Init(1.0, 0, 0, 0);
-
-		RotateQuaternion(
-			hmdQuat,
-			DegToRad(ArduinoIMU[2]),
-			DegToRad(ArduinoIMU[0]),
-			DegToRad(ArduinoIMU[1]));
-
-		NormalizeQuaternion(hmdQuat);
+		yprOffset[0] = ArduinoIMU[0];
+		yprOffset[1] = ArduinoIMU[1];
+		yprOffset[2] = ArduinoIMU[2];
 	}
 	else {
 		float length = std::sqrt(ArduinoIMUQuat.x * ArduinoIMUQuat.x + ArduinoIMUQuat.y * ArduinoIMUQuat.y + ArduinoIMUQuat.z * ArduinoIMUQuat.z + ArduinoIMUQuat.w * ArduinoIMUQuat.w);
@@ -251,14 +204,10 @@ void ArduinoIMURead()
 			}
 			else if (CorrectAngleValue(ArduinoIMU[0]) && CorrectAngleValue(ArduinoIMU[1]) && CorrectAngleValue(ArduinoIMU[2])) // save last correct values
 			{
-				yprOffset[0] = ArduinoIMU[0] - LastArduinoIMU[0];
-				yprOffset[1] = ArduinoIMU[1] - LastArduinoIMU[1];
-				yprOffset[2] = ArduinoIMU[2] - LastArduinoIMU[2];
-
 				LastArduinoIMU[0] = ArduinoIMU[0];
 				LastArduinoIMU[1] = ArduinoIMU[1];
 				LastArduinoIMU[2] = ArduinoIMU[2];
-				
+
 				if (HMDInitCentring == false)
 					if (ArduinoIMU[0] != 0 || ArduinoIMU[1] != 0 || ArduinoIMU[2] != 0) {
 						SetCentering();
@@ -698,20 +647,6 @@ public:
 			*pfTop = -1.0;
 			*pfBottom = 1.0;
 		}
-	}	
-	
-	void MultiplyVectorByQuaternion(double vec[3], const vr::HmdQuaternion_t& q) {
-		double x = vec[0], y = vec[1], z = vec[2];
-		double qx = q.x, qy = q.y, qz = q.z, qw = q.w;
-		
-		double ix = qw * x + qy * z - qz * y;
-		double iy = qw * y + qz * x - qx * z;
-		double iz = qw * z + qx * y - qy * x;
-		double iw = -qx * x - qy * y - qz * z;
-
-		vec[0] = ix * qw + iw * -qx + iy * -qz - iz * -qy;
-		vec[1] = iy * qw + iw * -qy + iz * -qx - ix * -qz;
-		vec[2] = iz * qw + iw * -qz + ix * -qy - iy * -qx;
 	}
 
 	virtual DistortionCoordinates_t ComputeDistortion( EVREye eEye, float fU, float fV ) 
@@ -763,17 +698,15 @@ public:
 
 		if (HMDConnected || ArduinoNotRequire) {
 
-			double posOffset[3] = { 0, 0, 0 };
-
 			// Pos
-			if ((GetAsyncKeyState(VK_NUMPAD8) & 0x8000) != 0) posOffset[2] -= StepPos;
-			if ((GetAsyncKeyState(VK_NUMPAD2) & 0x8000) != 0) posOffset[2] += StepPos;
+			if ((GetAsyncKeyState(VK_NUMPAD8) & 0x8000) != 0) fPos[2] -= StepPos;
+			if ((GetAsyncKeyState(VK_NUMPAD2) & 0x8000) != 0) fPos[2] += StepPos;
 
-			if ((GetAsyncKeyState(VK_NUMPAD4) & 0x8000) != 0) posOffset[0] -= StepPos;
-			if ((GetAsyncKeyState(VK_NUMPAD6) & 0x8000) != 0) posOffset[0] += StepPos;
+			if ((GetAsyncKeyState(VK_NUMPAD4) & 0x8000) != 0) fPos[0] -= StepPos;
+			if ((GetAsyncKeyState(VK_NUMPAD6) & 0x8000) != 0) fPos[0] += StepPos;
 
-			if ((GetAsyncKeyState(m_hmdDownKey) & 0x8000) != 0) posOffset[1] += StepPos;
-			if ((GetAsyncKeyState(m_hmdUpKey) & 0x8000) != 0) posOffset[1] -= StepPos;
+			if ((GetAsyncKeyState(m_hmdDownKey) & 0x8000) != 0) fPos[1] += StepPos;
+			if ((GetAsyncKeyState(m_hmdUpKey) & 0x8000) != 0) fPos[1] -= StepPos;
 
 			// Yaw fixing
 			if ((GetAsyncKeyState(VK_NUMPAD1) & 0x8000) != 0 && yprOffset[0] < 180) yprOffset[0] += StepRot;
@@ -796,22 +729,9 @@ public:
 
 			// Set head tracking rotation
 			if (ArduinoRotationType == false) { // YPR
-				RotateQuaternion(
-					hmdQuat,
-					DegToRad(yprOffset[2]),
-					DegToRad(yprOffset[0]),
-					DegToRad(yprOffset[1]));
-
-				NormalizeQuaternion(hmdQuat);
-								
-				// Assign updated rotation to HMD
-				pose.qRotation = hmdQuat;												
-
-				// Reset YPR offsets to prevent drifting
-				yprOffset[0] = 0;
-				yprOffset[1] = 0;
-				yprOffset[2] = 0;
-
+				pose.qRotation = EulerAngleToQuaternion(DegToRad( OffsetYPR(ArduinoIMU[2], yprOffset[2]) ),
+														DegToRad( OffsetYPR(ArduinoIMU[0], yprOffset[0]) * -1 ),
+														DegToRad( OffsetYPR(ArduinoIMU[1], yprOffset[1]) * -1 ));
 			}  else { // Quaternion
 				// Centered
 				pose.qRotation.w = ArduinoIMUQuat.w * LastArduinoIMUQuat.w - ArduinoIMUQuat.x * LastArduinoIMUQuat.x - ArduinoIMUQuat.y * LastArduinoIMUQuat.y - ArduinoIMUQuat.z * LastArduinoIMUQuat.z;
@@ -821,12 +741,6 @@ public:
 			}
 
 			//Set head position tracking
-			MultiplyVectorByQuaternion(posOffset, hmdQuat);
-			
-			fPos[0] += posOffset[0];
-			fPos[1] += posOffset[1];
-			fPos[2] += posOffset[2];
-
 			pose.vecPosition[0] = fPos[0]; // X
 			pose.vecPosition[1] = fPos[1]; // Z
 
