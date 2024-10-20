@@ -747,12 +747,12 @@ public:
 			if ((GetAsyncKeyState(m_hmdUpKey) & 0x8000) != 0) posOffset[1] -= StepPos;
 
 			// Yaw fixing
-			if ((GetAsyncKeyState(VK_NUMPAD1) & 0x8000) != 0 && yprOffset[0] < 180) yprOffset[0] += StepRot;
-			if ((GetAsyncKeyState(VK_NUMPAD3) & 0x8000) != 0 && yprOffset[0] > -180) yprOffset[0] -= StepRot;
+			if ((GetAsyncKeyState(VK_NUMPAD1) & 0x8000) != 0 && yprOffset[0] < 180) yprOffset[0] -= StepRot;
+			if ((GetAsyncKeyState(VK_NUMPAD3) & 0x8000) != 0 && yprOffset[0] > -180) yprOffset[0] += StepRot;
 
 			// Roll fixing
-			if ((GetAsyncKeyState(VK_NUMPAD7) & 0x8000) != 0 && yprOffset[2] < 180) yprOffset[2] += StepRot;
-			if ((GetAsyncKeyState(VK_NUMPAD9) & 0x8000) != 0 && yprOffset[2] > -180) yprOffset[2] -= StepRot;
+			if ((GetAsyncKeyState(VK_NUMPAD7) & 0x8000) != 0 && yprOffset[1] < 180) yprOffset[1] -= StepRot;
+			if ((GetAsyncKeyState(VK_NUMPAD9) & 0x8000) != 0 && yprOffset[1] > -180) yprOffset[1] += StepRot;
 
 			if ((GetAsyncKeyState(m_hmdResetKey) & 0x8000) != 0)
 			{
